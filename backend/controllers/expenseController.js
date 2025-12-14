@@ -34,25 +34,40 @@ exports.getProfile = async (req, res) => {
 
 exports.getSummary = async (req, res) => {
   const user_id = req.user.userId;
+  const { start, end } = req.query;
+  const startDate = start || "2000-01-01";
+  const endDate = end || "2100-01-01";
+
+  // recent list (mengikuti dateRange dari web)
   const [recentRows] = await db.query(
-    `SELECT id, category, amount, DATE_FORMAT(date, '%d %b %Y') as date, date as isoDate
-    FROM expense
-    WHERE user_id=?
-    ORDER BY date DESC`,
-    [user_id]
+    `SELECT id, category, amount,
+            DATE_FORMAT(date, '%d %b %Y') as date,
+            date as isoDate,
+            installment_id
+     FROM expense
+     WHERE user_id=?
+       AND date BETWEEN ? AND ?
+     ORDER BY date DESC`,
+    [user_id, startDate, endDate]
   );
-  const [barRows] = await db.query(
+
+  // kategori 30 hari terakhir untuk donut / insights
+  const [catRows] = await db.query(
     `SELECT category, SUM(amount) as amount 
      FROM expense 
-     WHERE user_id=? AND date >= CURDATE() - INTERVAL 30 DAY
+     WHERE user_id=?
+       AND date >= CURDATE() - INTERVAL 30 DAY
      GROUP BY category`,
     [user_id]
   );
+
   res.json({
     recent: recentRows,
-    barChart: barRows,
+    barChart: catRows,    // biar kode lama/web lain yang pakai barChart tetap jalan
+    donutChart: catRows,  // dipakai web & mobile utk Categories/Insights
   });
 };
+
 
 exports.payInstallment = async (req, res) => {
   const user_id = req.user.userId;

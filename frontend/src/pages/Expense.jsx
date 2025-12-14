@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import api from "../api/axios";
-import { Download, CreditCard, Plus } from "lucide-react";
-import Tabs from "../components/Tabs";
+import { CreditCard, Plus } from "lucide-react";
 import CategoryListTab from "../components/CategoryListTab";
 import InsightsTab from "../components/InsightsTab";
 import QuickActionsTab from "../components/QuickActionsTab";
@@ -33,7 +32,7 @@ const Expense = () => {
   });
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
-  const [totalExpense, setTotalExpense] = useState(0);
+  const [totalExpense, setTotalExpense] = useState(0); // masih dipakai utk avgPerDay global
   const [expenseIdToEdit, setExpenseIdToEdit] = useState(null);
   const [activeTab, setActiveTab] = useState("categories");
   const [installments, setInstallments] = useState([]);
@@ -59,7 +58,7 @@ const Expense = () => {
   const fetchDashboard = async () => {
     try {
       const res = await api.get("/api/dashboard");
-      setTotalExpense(res.data.totalExpense);
+      setTotalExpense(res.data.totalExpense || 0);
     } catch (err) {
       console.error(err);
     }
@@ -67,10 +66,17 @@ const Expense = () => {
 
   const fetchSummary = async () => {
     try {
-      const res = await api.get("/api/expense/summary");
+      const queryParams = new URLSearchParams({
+        start: dateRange.start,
+        end: dateRange.end,
+      }).toString();
+
+      const res = await api.get(`/api/expense/summary?${queryParams}`);
       console.log("Expense Summary Response:", res.data);
-      setRecent(res.data.recent || res.data.recentRows || []);
-      // Backend expense returns `barChart`, but we use `donutChart` state for categories
+
+      const rec = res.data.recent || res.data.recentRows || [];
+      setRecent(rec);
+
       const categories = res.data.donutChart || res.data.barChart || [];
       console.log("Setting donutChart (categories) to:", categories);
       setDonutChart(categories);
@@ -87,7 +93,12 @@ const Expense = () => {
       }).toString();
 
       const res = await api.get(`/api/expense/overview?${queryParams}`);
-      setBarData(res.data.barChart);
+      const bars = res.data.barChart || [];
+      setBarData(bars);
+
+      const total =
+        bars.reduce((sum, b) => sum + Number(b.amount || 0), 0) || 0;
+      setTotalExpense(total);
     } catch (error) {
       console.error("Error fetching overview:", error);
     }
@@ -101,7 +112,6 @@ const Expense = () => {
     loadInstallments();
   }, [dateRange]);
 
-  // Handle query parameter from dashboard
   useEffect(() => {
     const installmentIdFromQuery = searchParams.get("installment_id");
     if (installmentIdFromQuery && installments.length > 0) {
@@ -123,7 +133,6 @@ const Expense = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // Auto-fill amount and set category to 'cicilan' when installment is selected
     if (name === "installment_id" && value) {
       const selectedInstallment = installments.find(
         (i) => i.id === Number(value)
@@ -138,7 +147,6 @@ const Expense = () => {
         return;
       }
     } else if (name === "installment_id" && !value) {
-      // Clear amount and category when installment is deselected
       setForm({ ...form, installment_id: "", amount: "", category: "" });
       return;
     }
@@ -165,10 +173,10 @@ const Expense = () => {
       await api.post("/api/expense", payload);
       setForm({ amount: "", category: "", date: "", installment_id: "" });
       setShowAddForm(false);
-      fetchSummary();
-      fetchOverview();
-      fetchDashboard();
-      await loadInstallments(); // Reload to update remaining months
+      await fetchSummary();
+      await fetchOverview();
+      await fetchDashboard();
+      await loadInstallments();
     } catch (error) {
       console.error("Error adding expense:", error);
       const errorMessage =
@@ -191,8 +199,8 @@ const Expense = () => {
       setEditingExpense(null);
       setExpenseIdToEdit(null);
       setShowAddForm(false);
-      fetchSummary();
-      fetchOverview();
+      await fetchSummary();
+      await fetchOverview();
     } catch (error) {
       console.error("Error updating expense:", error);
       alert("Gagal mengupdate expense");
@@ -268,7 +276,6 @@ const Expense = () => {
 
   const handleDownload = async () => {
     try {
-      // Download all expense data without date range filter
       const response = await api.get(`/api/expense/export`, {
         responseType: "blob",
       });
@@ -315,6 +322,14 @@ const Expense = () => {
           .slice()
           .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))[0]
       : null;
+
+  // total & rata-rata yang benar-benar sesuai filter dateRange (dipakai di card & right sidebar)
+  const totalShown = barData.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+  const daysFromBars = barData.length || 1;
+  const avgPerDayShown = daysFromBars ? totalShown / daysFromBars : 0;
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -377,7 +392,7 @@ const Expense = () => {
           <div className="lg:col-span-2 space-y-6">
             <ChartSection
               balanceLabel="Total Expense"
-              balanceValue={totalExpense}
+              balanceValue={totalShown}  
               BalanceIcon={CreditCard}
               accentColor="red"
               chartData={barData}
@@ -396,7 +411,6 @@ const Expense = () => {
 
           {/* Right Column - Add Expense Form and Stats */}
           <div className="space-y-6">
-            {/* Add Expense Form Modal */}
             {showAddForm && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 h-full p-4">
                 <div
@@ -421,7 +435,7 @@ const Expense = () => {
                       }}
                       className="text-gray-500 hover:text-gray-700 text-xl hover:cursor-pointer"
                     >
-                      ✕
+                      
                     </button>
                   </div>
                   <form
@@ -530,13 +544,15 @@ const Expense = () => {
               stats={[
                 {
                   label: "Total (shown)",
-                  value: `Rp ${Number(totalExpense || 0).toLocaleString(
+                  value: `Rp ${Number(totalShown || 0).toLocaleString(
                     "id-ID"
                   )}`,
                 },
                 {
                   label: "Avg per day",
-                  value: `Rp ${Number(avgPerDay || 0).toLocaleString("id-ID")}`,
+                  value: `Rp ${Number(
+                    avgPerDayShown || 0
+                  ).toLocaleString("id-ID")}`,
                 },
                 {
                   label: "Top Category",
@@ -584,7 +600,8 @@ const Expense = () => {
                       onFilterPreset={(preset) => {
                         const today = new Date();
                         let start = new Date();
-                        if (preset === "7d") start.setDate(today.getDate() - 6);
+                        if (preset === "7d")
+                          start.setDate(today.getDate() - 6);
                         else start.setDate(today.getDate() - 29);
                         setDateRange({
                           start: start.toISOString().slice(0, 10),
