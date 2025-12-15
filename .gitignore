@@ -1,0 +1,11 @@
+# ENV
+.env
+.env.*
+frontend/.env
+backend/.env
+
+# Node
+node_modules/
+
+# Docker
+*.log

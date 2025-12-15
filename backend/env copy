@@ -1,0 +1,6 @@
+PORT=3000
+DB_HOST=yourhost
+DB_USER=yourusername
+DB_PASS=yourpassword
+DB_NAME=yourdbname
+JWT_SECRET=youjwtsecretkey

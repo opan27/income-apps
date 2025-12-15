@@ -1,0 +1,17 @@
+# ===== APP =====
+APP_NAME=expense-app
+APP_ENV=production
+
+# ===== BACKEND =====
+BACKEND_PORT=3000
+
+# ===== FRONTEND =====
+FRONTEND_PORT=80
+
+# ===== DATABASE =====
+DB_HOST=yourhost
+DB_PORT=3306
+DB_NAME=yourdbname
+DB_USER=yourusername
+DB_PASSWORD=yourpassword
+DB_ROOT_PASSWORD=yourpassword
